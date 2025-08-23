@@ -68,6 +68,24 @@ The Go API service handles backend requests and will integrate with MinIO for fi
   ```
 3. Access the health check endpoint at [http://localhost:8080/health](http://localhost:8080/health).
 
+#### 4. How to Run in Docker (with Docker Compose)
+1. Ensure Docker is installed and running.
+2. Confirm `/backend/Dockerfile` exists (created above).
+3. In the project root, run:
+  ```powershell
+  docker-compose up --build
+  ```
+4. Access the health check endpoint at [http://localhost:8080/health](http://localhost:8080/health).
+5. The Go API will run in a container and be networked with MinIO for future integration.
+ 6. Access the MinIO web UI at [http://localhost:9001](http://localhost:9001).
+ 7. If both URLs work, Go API and MinIO are running and networked correctly.
+
+#### 5. Verification
+- After running `docker-compose up --build`, verify:
+  - Go API is accessible at [http://localhost:8080/health](http://localhost:8080/health) and returns `OK`.
+  - MinIO web UI is accessible at [http://localhost:9001](http://localhost:9001) and allows bucket creation/upload.
+- This confirms both services are running and networked together for local development.
+
 #### 4. Next Steps
 - Integrate MinIO SDK for file upload functionality.
 - Add endpoints for uploading and retrieving files.
