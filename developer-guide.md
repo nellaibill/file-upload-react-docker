@@ -50,7 +50,30 @@ Run both MinIO and your Go API locally, so you can test file uploads and backend
 ---
 
 ## 2. Backend API Setup (Go)
-*To be documented in detail in the next steps.*
+### Go API Scaffolding
+
+#### 1. Overview
+The Go API service handles backend requests and will integrate with MinIO for file uploads.
+
+#### 2. Steps Completed
+- Created `/backend/main.go` with a minimal HTTP server and health check endpoint (`GET /health`).
+- Created `/backend/go.mod` for Go module definition.
+- Added `/backend/README.md` with instructions for running and next steps.
+
+#### 3. How to Run Locally
+1. Ensure Go is installed (version 1.21 or later).
+2. In the `/backend` directory, run:
+  ```powershell
+  go run main.go
+  ```
+3. Access the health check endpoint at [http://localhost:8080/health](http://localhost:8080/health).
+
+#### 4. Next Steps
+- Integrate MinIO SDK for file upload functionality.
+- Add endpoints for uploading and retrieving files.
+
+#### 5. Troubleshooting
+- If the server does not start, check for errors in the terminal and ensure port 8080 is free.
 
 ---
 
