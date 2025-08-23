@@ -1,0 +1,45 @@
+# Ignore node_modules folders
+node_modules/
+
+# Ignore build output and binaries
+/dist/
+/build/
+/bin/
+
+# Ignore logs
+*.log
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore environment files
+.env
+
+# Ignore coverage reports
+coverage/
+
+# Ignore IDE/editor folders
+.vscode/
+.idea/
+
+# Ignore Docker volumes
+minio-data/
+
+# Ignore Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Ignore other common temp files
+*.swp
+*.swo
+
+# Ignore React Native build folders
+android/
+ios/
+
+# Ignore Go build output
+/backend/*.exe
+/backend/*.out
+/backend/*.test
