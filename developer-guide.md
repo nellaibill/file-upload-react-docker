@@ -90,8 +90,35 @@ The Go API service handles backend requests and will integrate with MinIO for fi
 - Integrate MinIO SDK for file upload functionality.
 - Add endpoints for uploading and retrieving files.
 
+#### 6. High-Level Integration: Go API & MinIO
+
+**Goal:**
+Enable the Go API to upload files to MinIO (local S3-compatible storage) via an HTTP endpoint.
+
+**How it works:**
+1. The Go API will use the MinIO Go SDK to connect to the MinIO server using credentials and endpoint from environment variables.
+2. A new API endpoint (e.g., `POST /upload`) will accept file uploads from clients (such as the React Native app).
+3. The Go API will receive the file, then use the MinIO SDK to store it in a specified bucket on MinIO.
+4. The API will return a success response (and optionally, the file URL or metadata).
+
+**Benefits:**
+- Allows local development and testing of file uploads without AWS.
+- Mimics production S3 workflow using local infrastructure.
+- Easy to extend for additional features (metadata, retrieval, etc.).
+
+**Next Implementation Steps:**
+1. Install MinIO Go SDK in the backend.
+2. Add code to connect to MinIO using environment variables.
+3. Implement the file upload endpoint.
+4. Test and document the integration and any issues.
+
 #### 5. Troubleshooting
 - If the server does not start, check for errors in the terminal and ensure port 8080 is free.
+
+- **GLIBC version error in Docker:**
+  - Error: `/lib/x86_64-linux-gnu/libc.so.6: version 'GLIBC_2.34' not found`
+  - Cause: Go binary built against newer GLIBC than available in the run image.
+  - Solution: Use the same base image (`golang:1.21`) for both build and run stages in the Dockerfile.
 
 ---
 
