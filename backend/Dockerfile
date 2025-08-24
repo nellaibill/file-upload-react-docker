@@ -1,11 +1,10 @@
 # Build stage
-FROM golang:1.21 as builder
+FROM golang:1.23 as builder
 WORKDIR /app
 COPY . .
 RUN go build -o goapi main.go
 
-# Run stage (use same base image to avoid GLIBC errors)
-FROM golang:1.21
+FROM golang:1.23
 WORKDIR /app
 COPY --from=builder /app/goapi .
 EXPOSE 8080

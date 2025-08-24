@@ -61,7 +61,7 @@ The Go API service handles backend requests and will integrate with MinIO for fi
 - Added `/backend/README.md` with instructions for running and next steps.
 
 #### 3. How to Run Locally
-1. Ensure Go is installed (version 1.21 or later).
+1. Ensure Go is installed (version 1.23 or later).
 2. In the `/backend` directory, run:
   ```powershell
   go run main.go
@@ -70,7 +70,7 @@ The Go API service handles backend requests and will integrate with MinIO for fi
 
 #### 4. How to Run in Docker (with Docker Compose)
 1. Ensure Docker is installed and running.
-2. Confirm `/backend/Dockerfile` exists (created above).
+2. Confirm `/backend/Dockerfile` exists (created above) and uses `golang:1.23` as the base image.
 3. In the project root, run:
   ```powershell
   docker-compose up --build
@@ -114,6 +114,45 @@ Enable the Go API to upload files to MinIO (local S3-compatible storage) via an 
 
 #### 5. Troubleshooting
 - If the server does not start, check for errors in the terminal and ensure port 8080 is free.
+- **YAML syntax errors in docker-compose.yml:**
+  - Error: `yaml: line XX: mapping values are not allowed in this context`
+  - Cause: Indentation or formatting issues, especially in the `environment` section.
+  - Solution: Use list format for environment variables (e.g., `- MINIO_ENDPOINT=minio:9000`).
+
+- **MinIO client initialization error: Endpoint url cannot have fully qualified paths**
+  - Error: `Failed to initialize MinIO client: Endpoint url cannot have fully qualified paths.`
+  - Cause: MINIO_ENDPOINT was set to a full URL (e.g., `http://minio:9000`).
+  - Solution: Set MINIO_ENDPOINT to just `minio:9000` (host:port) in docker-compose.yml.
+
+- **Go build error: declared and not used**
+  - Error: `declared and not used: minioClient`
+  - Cause: Go does not allow unused variables.
+  - Solution: Remove or use the variable. For now, replace `minioClient, err := ...` with `_, err := ...` until the client is used in code.
+
+---
+
+## Current Working State
+
+- MinIO and Go API are both running in Docker containers and networked together.
+- Environment variables for Go API are set using list format in docker-compose.yml.
+- MINIO_ENDPOINT uses host:port format (`minio:9000`).
+- Go API successfully initializes MinIO client and is ready for further integration (file upload endpoint, etc.).
+
+---
+
+## Next Steps
+- Implement file upload endpoint in Go API using MinIO SDK.
+- Continue documenting each step and any issues for future reference.
+
+- **MinIO client initialization error: Endpoint url cannot have fully qualified paths**
+  - Error: `Failed to initialize MinIO client: Endpoint url cannot have fully qualified paths.`
+  - Cause: MINIO_ENDPOINT was set to a full URL (e.g., `http://minio:9000`).
+  - Solution: Set MINIO_ENDPOINT to just `minio:9000` (host:port) in docker-compose.yml.
+
+- **Go build error: declared and not used**
+  - Error: `declared and not used: minioClient`
+  - Cause: Go does not allow unused variables.
+  - Solution: Remove or use the variable. For now, replace `minioClient, err := ...` with `_, err := ...` until the client is used in code.
 
 - **GLIBC version error in Docker:**
   - Error: `/lib/x86_64-linux-gnu/libc.so.6: version 'GLIBC_2.34' not found`
