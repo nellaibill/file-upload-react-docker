@@ -311,3 +311,29 @@ The Go API now supports file uploads directly to MinIO. Uploaded files are store
 - Next: Continue with frontend integration, authentication, or additional backend features as needed.
 
 ---
+
+## Issues Faced & Solutions (Frontend/Backend Integration)
+
+### 1. React Native Web: Upload Button Disabled
+- **Issue:** After selecting a file, the upload button remained disabled.
+- **Cause:** Expo DocumentPicker behaves differently on web; file object was not set correctly.
+- **Solution:** Added a web-specific file input fallback in `App.js` to ensure file selection works and enables the upload button.
+
+### 2. Upload Failed: `Failed to fetch`
+- **Issue:** Upload attempts from the frontend failed with a `Failed to fetch` error.
+- **Cause:** The browser could not reach the backend at `localhost` or LAN IP due to network isolation or CORS.
+- **Solution:** Updated the upload URL in `App.js` to use the LAN IP (`192.168.1.5`). Added detailed error logging to help diagnose issues.
+
+### 3. CORS Error (Cross-Origin Resource Sharing)
+- **Issue:** Even with correct backend URL, uploads failed due to CORS restrictions.
+- **Cause:** Go backend did not send CORS headers, blocking browser requests.
+- **Solution:** Added CORS headers and OPTIONS method handling to `/upload` and `/health` endpoints in `main.go`.
+
+### 4. Backend Accessibility
+- **Issue:** Backend was accessible via Postman but not from the browser.
+- **Cause:** Backend was bound to `localhost` only, not `0.0.0.0`.
+- **Solution:** Ensured Go server listens on `:8080` and Docker exposes port 8080.
+
+### 5. Debugging & Error Logging
+- **Issue:** Hard to diagnose frontend upload errors.
+- **Solution:** Enhanced error logging in `App.js` to show error objects and HTTP response details in the UI.
