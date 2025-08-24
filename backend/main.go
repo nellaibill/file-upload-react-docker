@@ -7,8 +7,9 @@ import (
 	"os"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"io"
+	"context"
 )
+var minioClient *minio.Client
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -29,14 +30,32 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// For now, just read the file and discard (integration with MinIO will follow)
-	_, err = io.Copy(io.Discard, file)
+	// Upload to MinIO
+	bucketName := "uploads"
+	objectName := handler.Filename
+	contentType := handler.Header.Get("Content-Type")
+
+	ctx := context.Background()
+	exists, errBucketExists := minioClient.BucketExists(ctx, bucketName)
+	if errBucketExists != nil {
+		http.Error(w, "Error checking bucket", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		err = minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		if err != nil {
+			http.Error(w, "Error creating bucket", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	_, err = minioClient.PutObject(ctx, bucketName, objectName, file, handler.Size, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
-		http.Error(w, "Error reading file", http.StatusInternalServerError)
+		http.Error(w, "Error uploading to MinIO", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "File %s uploaded successfully!", handler.Filename)
+	fmt.Fprintf(w, "File %s uploaded to MinIO bucket '%s' successfully!", objectName, bucketName)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +69,8 @@ func main() {
 	minioSecretKey := os.Getenv("MINIO_SECRET_KEY")
 	useSSL := false
 
-	_, err := minio.New(minioEndpoint, &minio.Options{
+	var err error
+	minioClient, err = minio.New(minioEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioAccessKey, minioSecretKey, ""),
 		Secure: useSSL,
 	})

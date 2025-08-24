@@ -284,3 +284,30 @@ volumes:
 ---
 
 *This document will be updated as we progress through each step.*
+
+---
+
+## 6. File Upload Integration & Verification (MinIO)
+
+### Overview
+The Go API now supports file uploads directly to MinIO. Uploaded files are stored in the `uploads` bucket and are visible in the MinIO web UI.
+
+### How to Test
+1. Start the stack with Docker Compose:
+   ```powershell
+   docker-compose up --build
+   ```
+2. Use Postman or curl to send a POST request to `http://localhost:8080/upload` with a form-data field named `file`.
+3. On success, you will receive a message confirming the file was uploaded.
+4. Open the MinIO web UI at [http://localhost:9001](http://localhost:9001), log in, and check the `uploads` bucket for your file.
+
+### Troubleshooting
+- If files do not appear in MinIO, check the Go API logs for errors.
+- Ensure the bucket name is `uploads` and the credentials are correct.
+- Use `docker-compose logs goapi` and `docker-compose logs minio` for debugging.
+
+### Status
+- ✅ MinIO integration is complete. Uploaded files are visible in the MinIO web UI.
+- Next: Continue with frontend integration, authentication, or additional backend features as needed.
+
+---
