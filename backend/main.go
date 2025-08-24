@@ -7,7 +7,37 @@ import (
 	"os"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"io"
 )
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form
+	err := r.ParseMultipartForm(10 << 20) // 10 MB max memory
+	if err != nil {
+		http.Error(w, "Error parsing form data", http.StatusBadRequest)
+		return
+	}
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// For now, just read the file and discard (integration with MinIO will follow)
+	_, err = io.Copy(io.Discard, file)
+	if err != nil {
+		http.Error(w, "Error reading file", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "File %s uploaded successfully!", handler.Filename)
+}
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "OK")
@@ -30,6 +60,7 @@ func main() {
 	log.Println("MinIO client initialized successfully.")
 
 	http.HandleFunc("/health", healthHandler)
+		http.HandleFunc("/upload", uploadHandler)
 	// ...existing code...
 	log.Println("Go API server starting on :8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
