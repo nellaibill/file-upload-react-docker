@@ -8,8 +8,50 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"context"
+	"io"
+	"strings"
 )
+
 var minioClient *minio.Client
+
+func downloadHandler(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Get filename from URL
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 {
+		http.Error(w, "Missing filename", http.StatusBadRequest)
+		return
+	}
+	filename := parts[2]
+	bucketName := "uploads"
+	ctx := context.Background()
+	obj, err := minioClient.GetObject(ctx, bucketName, filename, minio.GetObjectOptions{})
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusInternalServerError)
+		return
+	}
+	stat, err := obj.Stat()
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", stat.ContentType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size))
+	_, err = io.Copy(w, obj)
+	if err != nil {
+		http.Error(w, "Error streaming file", http.StatusInternalServerError)
+		return
+	}
+}
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -66,6 +108,30 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "File %s uploaded to MinIO bucket '%s' successfully!", objectName, bucketName)
 }
 
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	bucketName := "uploads"
+	ctx := context.Background()
+	var files []string
+	for object := range minioClient.ListObjects(ctx, bucketName, minio.ListObjectsOptions{Recursive: true}) {
+		if object.Err != nil {
+			http.Error(w, "Error listing objects", http.StatusInternalServerError)
+			return
+		}
+		files = append(files, object.Key)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, "%v", files)
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	// CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -79,6 +145,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	http.HandleFunc("/download/", downloadHandler)
 	// MinIO client initialization
 	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
 	minioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -96,7 +163,8 @@ func main() {
 	log.Println("MinIO client initialized successfully.")
 
 	http.HandleFunc("/health", healthHandler)
-		http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/files", filesHandler)
 	// ...existing code...
 	log.Println("Go API server starting on :8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
