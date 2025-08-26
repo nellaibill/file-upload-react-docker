@@ -25,5 +25,13 @@ services:
     depends_on:
       - minio
 
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "19006:19006"
+    depends_on:
+      - goapi
+
 volumes:
   minio-data:

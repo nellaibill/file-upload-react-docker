@@ -48,12 +48,15 @@ export default function App() {
   const [videoList, setVideoList] = useState([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
 
-  const getVideoUrl = (fname) => `http://192.168.1.5:8080/download/${fname}`;
+  // Use dynamic backend API URLs for browser access
+  const backendHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const backendPort = 8080;
+  const getVideoUrl = (fname) => `http://${backendHost}:${backendPort}/download/${fname}`;
 
   const fetchVideoList = async () => {
     setLoadingVideos(true);
     try {
-      const response = await fetch('http://192.168.1.5:8080/files');
+      const response = await fetch(`http://${backendHost}:${backendPort}/files`);
       if (!response.ok) {
         setVideoList([]);
         setLoadingVideos(false);
@@ -133,8 +136,9 @@ export default function App() {
       if (!response.ok) {
         setMessage('Upload failed: HTTP ' + response.status);
       } else {
-        setMessage('Upload successful!');
-        fetchVideoList();
+    setMessage('Upload successful!');
+    setFile(null); // Clear selected file after successful upload
+    fetchVideoList();
       }
     } catch (error) {
       setMessage('Upload failed: ' + error.message);
