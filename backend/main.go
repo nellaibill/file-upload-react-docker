@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -129,7 +130,7 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 		files = append(files, object.Key)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, "%v", files)
+	json.NewEncoder(w).Encode(files)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
