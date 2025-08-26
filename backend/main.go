@@ -121,13 +121,20 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 
 	bucketName := "uploads"
 	ctx := context.Background()
-	var files []string
+	type FileInfo struct {
+		Name        string    `json:"name"`
+		LastModified string   `json:"lastModified"`
+	}
+	var files []FileInfo
 	for object := range minioClient.ListObjects(ctx, bucketName, minio.ListObjectsOptions{Recursive: true}) {
 		if object.Err != nil {
 			http.Error(w, "Error listing objects", http.StatusInternalServerError)
 			return
 		}
-		files = append(files, object.Key)
+		files = append(files, FileInfo{
+			Name: object.Key,
+			LastModified: object.LastModified.Format("2006-01-02T15:04:05Z07:00"),
+		})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(files)
