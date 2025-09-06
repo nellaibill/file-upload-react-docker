@@ -1,11 +1,12 @@
 version: '3.8'
 services:
+  # MinIO: S3-compatible object storage (for local dev)
   minio:
     image: minio/minio
     container_name: minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000"   # MinIO API
+      - "9001:9001"   # MinIO Console UI
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -13,11 +14,12 @@ services:
     volumes:
       - minio-data:/data
 
+  # Go API: Handles video upload, DynamoDB, and S3 logic
   goapi:
     build: ./backend
     container_name: goapi
     ports:
-      - "8080:8080"
+      - "8080:8080"   # Go API server
     environment:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
@@ -25,13 +27,28 @@ services:
     depends_on:
       - minio
 
+  # React Native (Expo for web): Frontend UI
   frontend:
     build: ./frontend
     container_name: frontend
     ports:
-      - "19006:19006"
+      - "19006:19006" # Expo web server
     depends_on:
       - goapi
+
+  # LocalStack: AWS cloud service emulator (S3, DynamoDB, etc.)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "9007:4566"   # LocalStack edge port (all AWS APIs)
+    environment:
+      - SERVICES=s3,dynamodb,sts
+      - DEBUG=1
+      - DATA_DIR=/var/lib/localstack
+    volumes:
+      - ./localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   minio-data:
