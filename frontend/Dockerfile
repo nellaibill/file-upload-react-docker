@@ -11,4 +11,4 @@ CMD echo "==============================" && \
 	echo " Expo Web UI running in Docker" && \
 	echo " Open http://localhost:19006 " && \
 	echo "==============================" && \
-	npm run web
+	npx expo start --web --non-interactive --port 19006
