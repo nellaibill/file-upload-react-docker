@@ -1,3 +1,16 @@
+## 7. Test DynamoDB Table and Upload
+
+You can test your DynamoDB table and upload a sample item using the provided script:
+
+```
+bash infra/dynamodb_test_upload.sh
+```
+
+This will:
+- List DynamoDB tables in LocalStack
+- Insert a test item into the `videos` table
+- Fetch and display the inserted item
+
 # Developer Guide: LocalStack + Terraform Setup
 
 ## 1. Prerequisites
