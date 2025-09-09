@@ -40,6 +40,7 @@ function groupVideosByDate(files) {
 }
 
 export default function App() {
+
   const [modalVisible, setModalVisible] = useState(false);
   const [modalVideo, setModalVideo] = useState(null);
   const [file, setFile] = useState(null);
@@ -51,7 +52,18 @@ export default function App() {
   // Use dynamic backend API URLs for browser access
   const backendHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const backendPort = 8080;
-  const getVideoUrl = (fname) => `http://${backendHost}:${backendPort}/download/${fname}`;
+  const getVideoUrl = async (fname) => {
+    // Fetch pre-signed download URL from backend
+    try {
+      const resp = await fetch(`http://${backendHost}:${backendPort}/download/${fname}`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.download_url;
+    } catch {
+      return null;
+    }
+  };
+
 
   const fetchVideoList = async () => {
     setLoadingVideos(true);
@@ -63,8 +75,9 @@ export default function App() {
         return;
       }
       const files = await response.json();
-      const videos = files.filter(file => file.name.match(/\.(mp4|webm|mov)$/i));
-      videos.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+      // The backend returns [{ video_id, filename, content_type, created_at }]
+      const videos = files.filter(file => file.filename && file.filename.match(/\.(mp4|webm|mov)$/i));
+      videos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       setVideoList(videos);
     } catch (err) {
       setVideoList([]);
@@ -110,6 +123,7 @@ export default function App() {
     }
   };
 
+
   const uploadFile = async () => {
     if (!file) {
       setMessage('No file selected');
@@ -118,27 +132,48 @@ export default function App() {
     setUploading(true);
     setMessage('');
     try {
-      let formData = new FormData();
+      // 1. Request pre-signed upload URL from backend
+      const videoId = `vid_${Date.now()}`;
+      const uploadMeta = {
+        video_id: videoId,
+        filename: file.name,
+        content_type: file.type || file.mimeType || 'video/mp4',
+      };
+      const resp = await fetch(`http://${backendHost}:${backendPort}/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uploadMeta),
+      });
+      if (!resp.ok) {
+        setMessage('Failed to get upload URL: HTTP ' + resp.status);
+        setUploading(false);
+        return;
+      }
+      const { upload_url } = await resp.json();
+      // 2. Upload file to S3 using pre-signed URL
+      let uploadResp;
+      // Replace any 'localstack:PORT' with 'localhost:9007' to avoid double port in URL
+      const fixedUrl = upload_url.replace(/localstack:\d+/, backendHost + ':9007');
       if (Platform.OS === 'web' && file.fileObj) {
-        formData.append('file', file.fileObj);
+        uploadResp = await fetch(fixedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.fileObj.type || 'video/mp4' },
+          body: file.fileObj,
+        });
       } else {
-        formData.append('file', {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType || file.type || 'video/mp4',
+        // For native, fetch/Blob may need adjustment
+        uploadResp = await fetch(fixedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.mimeType || file.type || 'video/mp4' },
+          body: file,
         });
       }
-      const response = await fetch('http://192.168.1.5:8080/upload', {
-        method: 'POST',
-        body: formData,
-        headers: Platform.OS === 'web' ? {} : { 'Content-Type': 'multipart/form-data' },
-      });
-      if (!response.ok) {
-        setMessage('Upload failed: HTTP ' + response.status);
+      if (!uploadResp.ok) {
+        setMessage('S3 upload failed: HTTP ' + uploadResp.status);
       } else {
-    setMessage('Upload successful!');
-    setFile(null); // Clear selected file after successful upload
-    fetchVideoList();
+        setMessage('Upload successful!');
+        setFile(null);
+        fetchVideoList();
       }
     } catch (error) {
       setMessage('Upload failed: ' + error.message);
@@ -146,7 +181,14 @@ export default function App() {
     setUploading(false);
   };
 
-  const groupedVideos = groupVideosByDate(videoList);
+
+  const groupedVideos = groupVideosByDate(
+    videoList.map(v => ({
+      ...v,
+      name: v.filename,
+      lastModified: v.created_at,
+    }))
+  );
 
   return (
     <View style={styles.container}>
@@ -185,9 +227,14 @@ export default function App() {
                   <TouchableOpacity
                     key={file.name}
                     style={styles.mediaCard}
-                    onPress={() => {
-                      setModalVideo(getVideoUrl(file.name));
-                      setModalVisible(true);
+                    onPress={async () => {
+                      const url = await getVideoUrl(file.name);
+                      if (url) {
+                        setModalVideo(url);
+                        setModalVisible(true);
+                      } else {
+                        setMessage('Failed to get download URL');
+                      }
                     }}
                   >
                     <View style={styles.thumbWrapper}>

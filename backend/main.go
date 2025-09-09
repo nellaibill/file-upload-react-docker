@@ -30,17 +30,38 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-	// Get filename from URL
+	// Parse filename from URL: /download/{filename}
 	path := r.URL.Path
 	parts := strings.Split(path, "/")
-	if len(parts) < 3 {
+	if len(parts) < 3 || parts[2] == "" {
 		http.Error(w, "Missing filename", http.StatusBadRequest)
 		return
 	}
-	// filename := parts[2] // Not used yet
-	// TODO: Implement S3 download logic
-	http.Error(w, "Not implemented: S3 download", http.StatusNotImplemented)
+	filename := parts[2]
+
+	bucket := os.Getenv("S3_BUCKET")
+	presignClient := s3.NewPresignClient(s3Client)
+	presignParams := &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &filename,
+	}
+	presignResult, err := presignClient.PresignGetObject(r.Context(), presignParams)
+	if err != nil {
+		log.Printf("Failed to generate pre-signed download URL: %v", err)
+		http.Error(w, "Failed to generate download URL", http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]string{
+		"download_url": presignResult.URL,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 	return
 }
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -126,9 +147,49 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-	// TODO: Implement DynamoDB scan/list logic
-	http.Error(w, "Not implemented: DynamoDB list", http.StatusNotImplemented)
+	tableName := os.Getenv("DYNAMODB_TABLE")
+	input := &dynamodb.ScanInput{
+		TableName: &tableName,
+	}
+	result, err := dynamoClient.Scan(r.Context(), input)
+	if err != nil {
+		log.Printf("DynamoDB Scan error: %v", err)
+		http.Error(w, "Failed to list files", http.StatusInternalServerError)
+		return
+	}
+
+	type VideoItem struct {
+		VideoID     string `json:"video_id"`
+		Filename    string `json:"filename"`
+		ContentType string `json:"content_type"`
+		CreatedAt   string `json:"created_at"`
+	}
+
+	items := []VideoItem{}
+	for _, v := range result.Items {
+		item := VideoItem{}
+		if val, ok := v["video_id"].(*types.AttributeValueMemberS); ok {
+			item.VideoID = val.Value
+		}
+		if val, ok := v["filename"].(*types.AttributeValueMemberS); ok {
+			item.Filename = val.Value
+		}
+		if val, ok := v["content_type"].(*types.AttributeValueMemberS); ok {
+			item.ContentType = val.Value
+		}
+		if val, ok := v["created_at"].(*types.AttributeValueMemberS); ok {
+			item.CreatedAt = val.Value
+		}
+		items = append(items, item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
 	return
 }
 
