@@ -12,14 +12,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 var s3Client *s3.Client
 var dynamoClient *dynamodb.Client
-
 
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	// CORS headers
