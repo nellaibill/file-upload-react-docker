@@ -3,6 +3,24 @@ docker-compose up localstack
 
 # Developer Guide: LocalStack + Terraform + Fullstack Video Upload App
 
+## EC2 Simulation with Docker
+This project simulates the EC2 processing step using a Docker container (`ec2-sim`). After a file is uploaded to S3 (LocalStack), you can trigger the EC2 simulation container to process the file as if it were an EC2 instance opening a browser.
+
+### How it works
+- The `ec2-sim` Docker container acts as a mock EC2 instance.
+- It runs a Python script that simulates opening a browser and processing the uploaded S3 file.
+- You can pass the S3 bucket and key to the container via environment variables.
+
+### Usage
+To run the EC2 simulation container manually:
+```sh
+docker build -t ec2-sim ./ec2-sim
+docker run --rm -e S3_BUCKET=<your-bucket> -e S3_KEY=<your-file-key> ec2-sim
+```
+Replace `<your-bucket>` and `<your-file-key>` with the actual S3 bucket and file key.
+
+You can automate this step from the backend in the future.
+
 ## 1. Prerequisites
 - Docker & Docker Compose installed
 - AWS CLI installed (`pip install awscli`)

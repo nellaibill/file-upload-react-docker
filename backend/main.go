@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -61,8 +62,8 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
-	return
 }
+
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -107,6 +108,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 			"filename":     &types.AttributeValueMemberS{Value: req.Filename},
 			"content_type": &types.AttributeValueMemberS{Value: req.ContentType},
 			"created_at":   &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+			"status":       &types.AttributeValueMemberS{Value: "uploaded"},
 		},
 	})
 	if err != nil {
@@ -115,26 +117,35 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate pre-signed S3 upload URL
-	bucket := os.Getenv("S3_BUCKET")
-	presignClient := s3.NewPresignClient(s3Client)
-	presignParams := &s3.PutObjectInput{
-		Bucket:      &bucket,
-		Key:         &req.Filename,
-		ContentType: &req.ContentType,
-	}
-	presignResult, err := presignClient.PresignPutObject(r.Context(), presignParams)
-	if err != nil {
-		http.Error(w, "Failed to generate pre-signed URL", http.StatusInternalServerError)
-		return
-	}
+	// Step: Trigger EC2 simulation (Docker container)
+	go func(bucket, key, dynamoEndpoint string) {
+		log.Printf("[EC2-SIM] Launching simulation for s3://%s/%s", bucket, key)
+		cmd := []string{
+			"docker", "run", "--rm",
+			"-e", "S3_BUCKET=" + bucket,
+			"-e", "S3_KEY=" + key,
+			"-e", "DYNAMODB_ENDPOINT=" + dynamoEndpoint,
+			"ec2-sim",
+		}
+		if err := runCommand(cmd); err != nil {
+			log.Printf("[EC2-SIM] Error running simulation: %v", err)
+		}
+	}(os.Getenv("S3_BUCKET"), req.Filename, "http://host.docker.internal:9007")
+}
 
-	resp := map[string]string{
-		"upload_url": presignResult.URL,
+// runCommand runs a shell command and logs output/errors
+func runCommand(cmd []string) error {
+	if len(cmd) == 0 {
+		return nil
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-	return
+	log.Printf("[EC2-SIM] Running: %v", cmd)
+	// #nosec G204
+	proc := cmd[0]
+	args := cmd[1:]
+	c := exec.Command(proc, args...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
 }
 
 func filesHandler(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +200,6 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
-	return
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
