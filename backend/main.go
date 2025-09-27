@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -98,7 +101,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store metadata in DynamoDB
+	// Store metadata in DynamoDB, with status 'file uploaded'
 	tableName := os.Getenv("DYNAMODB_TABLE")
 	_, err := dynamoClient.PutItem(r.Context(), &dynamodb.PutItemInput{
 		TableName: &tableName,
@@ -107,12 +110,40 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 			"filename":     &types.AttributeValueMemberS{Value: req.Filename},
 			"content_type": &types.AttributeValueMemberS{Value: req.ContentType},
 			"created_at":   &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+			"status":       &types.AttributeValueMemberS{Value: "file uploaded"},
 		},
 	})
 	if err != nil {
 		log.Printf("DynamoDB PutItem error: %v", err)
 		http.Error(w, "Failed to store metadata in DynamoDB", http.StatusInternalServerError)
 		return
+	}
+
+	// Send SQS message for EC2 processing trigger
+	sqsQueueUrl := os.Getenv("SQS_QUEUE_URL")
+	if sqsQueueUrl != "" {
+		// Use the same AWS config as S3/DynamoDB
+		awsCfg, err := config.LoadDefaultConfig(r.Context(),
+			config.WithRegion(os.Getenv("AWS_REGION")),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				os.Getenv("AWS_ACCESS_KEY_ID"),
+				os.Getenv("AWS_SECRET_ACCESS_KEY"),
+				"",
+			)),
+		)
+		if err != nil {
+			log.Printf("Failed to load AWS config for SQS: %v", err)
+		} else {
+			sqsClient := sqs.NewFromConfig(awsCfg)
+			msgBody := fmt.Sprintf(`{"video_id":"%s","filename":"%s"}`, req.VideoID, req.Filename)
+			_, err := sqsClient.SendMessage(r.Context(), &sqs.SendMessageInput{
+				QueueUrl:    aws.String(sqsQueueUrl),
+				MessageBody: aws.String(msgBody),
+			})
+			if err != nil {
+				log.Printf("Failed to send SQS message: %v", err)
+			}
+		}
 	}
 
 	// Generate pre-signed S3 upload URL
@@ -205,12 +236,10 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// AWS SDK client initialization for LocalStack
+	// AWS SDK client initialization for real AWS
 	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	awsRegion := os.Getenv("AWS_REGION")
-	s3Endpoint := os.Getenv("S3_ENDPOINT")
-	dynamodbEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(awsRegion),
@@ -220,13 +249,11 @@ func main() {
 		log.Fatalf("Failed to load AWS config: %v", err)
 	}
 
-	s3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.EndpointResolver = s3.EndpointResolverFromURL(s3Endpoint)
-		o.UsePathStyle = true
-	})
-	dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
-		o.EndpointResolver = dynamodb.EndpointResolverFromURL(dynamodbEndpoint)
-	})
+	// S3: real AWS
+	s3Client = s3.NewFromConfig(cfg)
+
+	// DynamoDB: real AWS
+	dynamoClient = dynamodb.NewFromConfig(cfg)
 
 	http.HandleFunc("/download/", downloadHandler)
 	http.HandleFunc("/health", healthHandler)

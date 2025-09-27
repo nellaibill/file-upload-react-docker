@@ -1,22 +1,11 @@
-# Terraform configuration for LocalStack S3 and DynamoDB
 
+
+# Terraform configuration for AWS DynamoDB (real AWS)
 provider "aws" {
-  access_key = "test"
-  secret_key = "test"
-  region     = "us-east-1"
-  endpoints {
-    s3       = "http://localhost:9007"
-    dynamodb = "http://localhost:9007"
-    sts      = "http://localhost:9007"
-  }
-  # Force path-style URLs for S3 (required for LocalStack)
-  s3_use_path_style = true
+  region = "us-east-1"
 }
 
-resource "aws_s3_bucket" "video_bucket" {
-  bucket = "mybucket"
-  force_destroy = true
-}
+# S3 bucket 'mdsaleem1804' is pre-created and will be used by the application.
 
 resource "aws_dynamodb_table" "videos" {
   name           = "videos"
