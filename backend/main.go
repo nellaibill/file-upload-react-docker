@@ -10,9 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
-
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -117,33 +114,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("DynamoDB PutItem error: %v", err)
 		http.Error(w, "Failed to store metadata in DynamoDB", http.StatusInternalServerError)
 		return
-	}
-
-	// Send SQS message for EC2 processing trigger
-	sqsQueueUrl := os.Getenv("SQS_QUEUE_URL")
-	if sqsQueueUrl != "" {
-		// Use the same AWS config as S3/DynamoDB
-		awsCfg, err := config.LoadDefaultConfig(r.Context(),
-			config.WithRegion(os.Getenv("AWS_REGION")),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-				os.Getenv("AWS_ACCESS_KEY_ID"),
-				os.Getenv("AWS_SECRET_ACCESS_KEY"),
-				"",
-			)),
-		)
-		if err != nil {
-			log.Printf("Failed to load AWS config for SQS: %v", err)
-		} else {
-			sqsClient := sqs.NewFromConfig(awsCfg)
-			msgBody := fmt.Sprintf(`{"video_id":"%s","filename":"%s"}`, req.VideoID, req.Filename)
-			_, err := sqsClient.SendMessage(r.Context(), &sqs.SendMessageInput{
-				QueueUrl:    aws.String(sqsQueueUrl),
-				MessageBody: aws.String(msgBody),
-			})
-			if err != nil {
-				log.Printf("Failed to send SQS message: %v", err)
-			}
-		}
 	}
 
 	// Generate pre-signed S3 upload URL
