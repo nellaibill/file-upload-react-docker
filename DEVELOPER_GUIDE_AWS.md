@@ -185,7 +185,116 @@ If you want a more interactive HTML page (showing uploaded files), let me know a
 
 ---
 
-## 11. Summary
+## 11. Troubleshooting and Solutions: S3 → Lambda → EC2 Automation
+
+This section documents common issues faced during setup and how they were resolved, to help future developers.
+
+### Issue 1: Lambda Not Triggered by S3 Upload
+- **Symptom:** Files upload to S3, but Lambda is not invoked.
+- **Solution:**
+  - Check S3 bucket "Event notifications" in Properties. Ensure the event is enabled and points to the correct Lambda function.
+  - In Lambda, check the "Configuration" → "Triggers" tab. The S3 bucket should be listed.
+
+### Issue 2: Lambda Function Times Out
+- **Symptom:** CloudWatch logs show `Status: timeout` and Lambda does not complete.
+- **Solution:**
+  - Increase Lambda timeout (Configuration → General configuration). Set to at least 10 seconds.
+  - Add print/logging statements in Lambda code to debug where it gets stuck.
+
+### Issue 3: Lambda Lacks Permission to Start EC2
+- **Symptom:** Lambda runs but EC2 instance does not start. CloudWatch logs may show permission errors.
+- **Solution:**
+  - In Lambda → Configuration → Permissions, click the execution role link.
+  - In IAM, attach the `AmazonEC2FullAccess` policy (or a custom policy with `ec2:StartInstances` for your instance).
+
+### Issue 4: Lambda Code Errors
+- **Symptom:** CloudWatch logs show Python errors, wrong region, or wrong instance ID.
+- **Solution:**
+  - Double-check the region and instance ID in your Lambda code.
+  - Add print statements to log the event and API responses.
+
+### General Debugging Steps
+- Always check CloudWatch logs for Lambda execution details and errors.
+- Use print/logging in Lambda code to trace execution.
+- Confirm S3 event notification and Lambda trigger are correctly configured.
+- Make sure IAM permissions are sufficient for Lambda to perform required actions.
+
+---
+
+## 12. S3 → SQS → EC2: Event-Driven Processing (Recommended)
+
+This approach uses SQS as a queue for S3 upload events, making your workflow robust and scalable.
+
+### How it Works
+1. **S3 Event Notification:**
+   - Configure your S3 bucket to send an event notification to an SQS queue whenever a new file is uploaded.
+2. **EC2 Poller:**
+   - Your EC2 instance runs a Python script that polls the SQS queue for new messages.
+   - Each message contains the S3 bucket and object key of the uploaded file.
+   - The script downloads/processes the file, updates DynamoDB, and deletes the message from the queue.
+
+### Why Use SQS?
+- Decouples upload and processing (no hardcoding file names).
+- Handles multiple uploads and retries automatically.
+- Scales well for future needs.
+
+### Example Python Poller Script (EC2)
+```python
+import boto3
+import json
+import time
+
+sqs = boto3.client('sqs', region_name='YOUR_REGION')
+dynamodb = boto3.resource('dynamodb', region_name='YOUR_REGION')
+s3 = boto3.client('s3', region_name='YOUR_REGION')
+queue_url = 'YOUR_SQS_QUEUE_URL'
+table = dynamodb.Table('YOUR_DYNAMODB_TABLE')
+
+while True:
+    resp = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=20)
+    messages = resp.get('Messages', [])
+    if not messages:
+        print('No messages, waiting...')
+        time.sleep(10)
+        continue
+    for msg in messages:
+        body = json.loads(msg['Body'])
+        # S3 event structure
+        s3_info = body['Records'][0]['s3']
+        bucket = s3_info['bucket']['name']
+        key = s3_info['object']['key']
+        print(f'Processing file: s3://{bucket}/{key}')
+        # Download file (optional)
+        s3.download_file(bucket, key, '/home/ec2-user/' + key)
+        # Mimic processing
+        time.sleep(10)
+        # Update DynamoDB (customize as needed)
+        video_id = key  # or extract from key/metadata
+        table.update_item(
+            Key={'video_id': video_id},
+            UpdateExpression='SET #s = :val',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':val': 'processed'}
+        )
+        print('DynamoDB updated!')
+        # Delete message
+        sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=msg['ReceiptHandle'])
+        print('Message deleted from SQS')
+```
+
+### Setup Steps
+1. Create an SQS queue.
+2. In S3 bucket Properties → Event notifications, set destination to your SQS queue.
+3. Update your EC2 IAM role to allow SQS, S3, and DynamoDB access.
+4. Place and run the poller script on your EC2 instance.
+
+---
+
+This pattern is robust and production-ready. Let me know if you want step-by-step setup instructions for any part of this!
+
+---
+
+## 13. Summary
 - No LocalStack endpoints are used for real AWS.
 - All resources are in your AWS account.
 - Environment variables and permissions are critical for success.
